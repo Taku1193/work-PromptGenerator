@@ -34,6 +34,8 @@ class PromptGeneratorApp(tk.Tk):
         self.template_var = tk.StringVar(value=BUG_FIX_TEMPLATE.work_type)
         self.status_var = tk.StringVar(value="入力内容をもとにプロンプトを生成します。")
         self.input_widgets: dict[str, TextInputWidget | ttk.Combobox] = {}
+        self.placeholder_texts: dict[str, str] = {}
+        self.placeholder_active: set[str] = set()
         self.output_box: TextInputWidget | None = None
 
         self.configure(background="#f3f4f6")
@@ -91,6 +93,38 @@ class PromptGeneratorApp(tk.Tk):
         text_widget.bind("<Shift-Return>", self._insert_newline)
         text_widget.bind("<Shift-KP_Enter>", self._insert_newline)
         return text_widget
+
+    # 未入力欄に記載例を薄い文字で表示し、Webフォームの placeholder に近い見た目を作る。
+    # Text ウィジェットには標準の placeholder がないため、入力値とは別扱いする状態を保持する。
+    def _show_placeholder(self, key: str) -> None:
+        widget = self.input_widgets.get(key)
+        placeholder = self.placeholder_texts.get(key, "")
+        if not placeholder or not isinstance(widget, tk.Text):
+            return
+
+        widget.delete("1.0", "end")
+        widget.insert("1.0", placeholder)
+        widget.configure(foreground="#9ca3af")
+        self.placeholder_active.add(key)
+
+    # 記載例が表示されている入力欄へフォーカスしたとき、実入力を始められる空欄へ戻す。
+    def _hide_placeholder(self, key: str) -> None:
+        widget = self.input_widgets.get(key)
+        if key not in self.placeholder_active or not isinstance(widget, tk.Text):
+            return
+
+        widget.delete("1.0", "end")
+        widget.configure(foreground="#111827")
+        self.placeholder_active.discard(key)
+
+    # 入力欄からフォーカスが外れたとき、空欄なら再び記載例を表示する。
+    def _restore_placeholder_if_empty(self, key: str) -> None:
+        widget = self.input_widgets.get(key)
+        if not isinstance(widget, tk.Text):
+            return
+
+        if not widget.get("1.0", "end").strip():
+            self._show_placeholder(key)
 
     # Text ウィジェット上の Enter はフォーム送信ではなく、複数行入力の改行として扱う。
     def _insert_newline(self, event: tk.Event) -> str:
@@ -184,13 +218,14 @@ class PromptGeneratorApp(tk.Tk):
     # テンプレート定義に基づいて入力欄と操作ボタンを動的に構築する。
     def _build_input_fields(self, parent: tk.Widget) -> None:
         for row_index, field in enumerate(self.active_template.fields):
+            base_row = row_index * 2
             label = ttk.Label(
                 parent,
                 text=field.label,
                 font=self._ui_font(size=14, weight="bold"),
                 style="Field.TLabel",
             )
-            label.grid(row=row_index * 2, column=0, padx=12, pady=(12, 6), sticky="w")
+            label.grid(row=base_row, column=0, padx=12, pady=(12, 6), sticky="w")
 
             if field.kind == "option":
                 widget = ttk.Combobox(
@@ -205,9 +240,18 @@ class PromptGeneratorApp(tk.Tk):
                 widget = self._create_text_input(parent, field.height)
                 if field.default:
                     widget.insert("1.0", field.default)
+                if field.example:
+                    self.placeholder_texts[field.key] = field.example
+                    widget.bind("<FocusIn>", lambda _event, key=field.key: self._hide_placeholder(key))
+                    widget.bind(
+                        "<FocusOut>",
+                        lambda _event, key=field.key: self._restore_placeholder_if_empty(key),
+                    )
 
-            widget.grid(row=row_index * 2 + 1, column=0, padx=12, pady=(0, 4), sticky="ew")
+            widget.grid(row=base_row + 1, column=0, padx=12, pady=(0, 4), sticky="ew")
             self.input_widgets[field.key] = widget
+            if field.example and not field.default and isinstance(widget, tk.Text):
+                self._show_placeholder(field.key)
 
         button_frame = ttk.Frame(parent, style="Panel.TFrame")
         button_frame.grid(
@@ -278,6 +322,8 @@ class PromptGeneratorApp(tk.Tk):
         widget = self.input_widgets[key]
         if isinstance(widget, ttk.Combobox):
             return widget.get()
+        if key in self.placeholder_active:
+            return ""
         return widget.get("1.0", "end").strip()
 
     # 指定された入力欄へ値を設定し、クリアや初期化の共通処理として利用する。
@@ -288,8 +334,12 @@ class PromptGeneratorApp(tk.Tk):
             widget.set(value)
             return
         widget.delete("1.0", "end")
+        widget.configure(foreground="#111827")
+        self.placeholder_active.discard(key)
         if value:
             widget.insert("1.0", value)
+        else:
+            self._show_placeholder(key)
 
     # テンプレートが必要とする全入力値を辞書化し、レンダリング処理へ引き渡す。
     def collect_input_values(self) -> dict[str, str]:

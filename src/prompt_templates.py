@@ -5,13 +5,14 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class FieldDefinition:
-    """画面項目の表示名、入力種別、初期値などを保持する定義。"""
+    """画面項目の表示名、入力種別、初期値、記載例などを保持する定義。"""
 
     key: str
     label: str
     kind: str = "textbox"
     height: int = 90
     default: str = ""
+    example: str = ""
 
 
 @dataclass(frozen=True)
@@ -65,16 +66,66 @@ BUG_FIX_TEMPLATE = PromptTemplate(
     ),
     fields=(
         FieldDefinition("work_type", "作業種別", kind="option", default="バグ修正"),
-        FieldDefinition("consultation", "相談内容", height=80),
-        FieldDefinition("target", "対象", height=80),
-        FieldDefinition("source_location", "関連ソース・場所", height=80),
-        FieldDefinition("issue", "発生事象", height=100),
-        FieldDefinition("expected_behavior", "期待する動作", height=90),
-        FieldDefinition("actual_behavior", "実際の動作", height=90),
-        FieldDefinition("error_log", "エラー内容・ログ", height=120),
-        FieldDefinition("known_facts", "現状わかっていること", height=120),
-        FieldDefinition("constraints", "制約・注意点", height=100),
-        FieldDefinition("request_details", "依頼したいこと", height=100),
+        FieldDefinition(
+            "consultation",
+            "相談内容",
+            height=80,
+            example="ログイン画面で特定ユーザーだけログインできない原因を調べたい",
+        ),
+        FieldDefinition(
+            "target",
+            "対象",
+            height=80,
+            example="aaa-bbb-c1234",
+        ),
+        FieldDefinition(
+            "source_location",
+            "関連ソース・場所",
+            height=80,
+            example="src/auth/login.ts",
+        ),
+        FieldDefinition(
+            "issue",
+            "発生事象",
+            height=100,
+            example="正しいIDとパスワードを入力してもエラー画面に遷移する",
+        ),
+        FieldDefinition(
+            "expected_behavior",
+            "期待する動作",
+            height=90,
+            example="認証に成功した場合はトップ画面へ遷移する",
+        ),
+        FieldDefinition(
+            "actual_behavior",
+            "実際の動作",
+            height=90,
+            example="「認証に失敗しました」と表示され、ログインできない",
+        ),
+        FieldDefinition(
+            "error_log",
+            "エラー内容・ログ",
+            height=120,
+            example="Invalid password、401 Unauthorized、該当ログの抜粋",
+        ),
+        FieldDefinition(
+            "known_facts",
+            "現状わかっていること",
+            height=120,
+            example="管理者ユーザーでは再現せず、一般ユーザーのみ発生している",
+        ),
+        FieldDefinition(
+            "constraints",
+            "制約・注意点",
+            height=100,
+            example="DB構造は変更できない。既存APIのレスポンス形式は維持したい",
+        ),
+        FieldDefinition(
+            "request_details",
+            "依頼したいこと",
+            height=100,
+            example="原因候補、確認すべきファイル、修正方針を整理してほしい",
+        ),
     ),
 )
 

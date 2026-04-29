@@ -27,6 +27,14 @@ class PromptTemplateTest(unittest.TestCase):
         self.assertIn("# 作業種別\nバグ修正", prompt)
         self.assertIn("# 出力形式", prompt)
 
+    # 記載例は入力補助のための表示情報であり、未入力項目の本文として出力しないことを確認する。
+    def test_render_does_not_include_examples_for_empty_values(self) -> None:
+        prompt = BUG_FIX_TEMPLATE.render({"work_type": "バグ修正"})
+        target_field = next(field for field in BUG_FIX_TEMPLATE.fields if field.key == "target")
+
+        self.assertEqual("aaa-bbb-c1234", target_field.example)
+        self.assertNotIn(target_field.example, prompt)
+
 
 if __name__ == "__main__":
     unittest.main()
