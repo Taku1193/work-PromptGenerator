@@ -16,13 +16,44 @@ class FieldDefinition:
 
 
 @dataclass(frozen=True)
+class ConditionalOutputFormatItem:
+    """特定の入力状態に応じて、出力形式へ追加する項目を保持する定義。"""
+
+    field_key: str
+    text: str
+    insert_after: str
+    include_when_empty: bool = True
+
+
+@dataclass(frozen=True)
 class PromptTemplate:
     """作業種別ごとのプロンプト構造を保持し、最終文面を生成する定義。"""
 
     work_type: str
     role_text: str
-    output_format_text: str
+    output_format_items: tuple[str, ...]
     fields: tuple[FieldDefinition, ...]
+    conditional_output_format_items: tuple[ConditionalOutputFormatItem, ...] = ()
+
+    # 出力形式は条件付き項目を差し込んだ後に番号を振り直し、AIへの依頼内容を崩さない。
+    # 例: 関連ソースが未入力の場合だけ、調査開始点として確認すべき関連ファイルの列挙を依頼する。
+    def _render_output_format(self, values: dict[str, str]) -> str:
+        output_items = list(self.output_format_items)
+
+        for conditional_item in self.conditional_output_format_items:
+            field_value = values.get(conditional_item.field_key, "").strip()
+            should_include = not field_value if conditional_item.include_when_empty else bool(field_value)
+            if not should_include or conditional_item.text in output_items:
+                continue
+
+            try:
+                insert_index = output_items.index(conditional_item.insert_after) + 1
+            except ValueError:
+                insert_index = len(output_items)
+            output_items.insert(insert_index, conditional_item.text)
+
+        numbered_items = [f"{index}. {item}" for index, item in enumerate(output_items, start=1)]
+        return "以下の形式で回答してください。\n\n" + "\n".join(numbered_items)
 
     # 入力された各項目をテンプレート順に並べ、AIへ貼り付ける最終プロンプトへ整形する。
     # 未入力の項目はAIへ渡す情報として意味を持たないため、見出しごと出力対象から除外する。
@@ -42,7 +73,7 @@ class PromptTemplate:
         sections.extend(
             [
                 "# 出力形式",
-                self.output_format_text.strip(),
+                self._render_output_format(values),
             ]
         )
         return "\n".join(sections).strip()
@@ -54,15 +85,14 @@ BUG_FIX_TEMPLATE = PromptTemplate(
         "あなたは既存システムの保守開発を支援するエンジニアです。\n"
         "既存仕様への影響を最小限にしながら、原因調査と修正方針の整理を行ってください。"
     ),
-    output_format_text=(
-        "以下の形式で回答してください。\n\n"
-        "1. 原因候補\n"
-        "2. 追加で確認すべきこと\n"
-        "3. 修正方針\n"
-        "4. 修正対象ファイル\n"
-        "5. 影響範囲\n"
-        "6. テスト観点\n"
-        "7. 注意点"
+    output_format_items=(
+        "原因候補",
+        "追加で確認すべきこと",
+        "修正方針",
+        "修正対象ファイル",
+        "影響範囲",
+        "テスト観点",
+        "注意点",
     ),
     fields=(
         FieldDefinition("work_type", "作業種別", kind="option", default="バグ修正"),
@@ -125,6 +155,13 @@ BUG_FIX_TEMPLATE = PromptTemplate(
             "依頼したいこと",
             height=100,
             example="原因候補、確認すべきファイル、修正方針を整理してほしい",
+        ),
+    ),
+    conditional_output_format_items=(
+        ConditionalOutputFormatItem(
+            field_key="source_location",
+            text="確認すべき関連ファイル・処理",
+            insert_after="原因候補",
         ),
     ),
 )

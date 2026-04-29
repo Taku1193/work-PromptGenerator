@@ -35,6 +35,30 @@ class PromptTemplateTest(unittest.TestCase):
         self.assertEqual("aaa-bbb-c1234", target_field.example)
         self.assertNotIn(target_field.example, prompt)
 
+    # 関連ソースが未入力の場合は、AIに調査開始点を洗い出させるための出力項目を追加する。
+    def test_render_adds_related_file_check_when_source_location_is_empty(self) -> None:
+        prompt = BUG_FIX_TEMPLATE.render(
+            {
+                "work_type": "バグ修正",
+                "source_location": "",
+            }
+        )
+
+        self.assertIn("2. 確認すべき関連ファイル・処理", prompt)
+        self.assertIn("3. 追加で確認すべきこと", prompt)
+
+    # 関連ソースが入力済みの場合は、その場所を前提に調査するため追加の洗い出し項目を出さない。
+    def test_render_omits_related_file_check_when_source_location_exists(self) -> None:
+        prompt = BUG_FIX_TEMPLATE.render(
+            {
+                "work_type": "バグ修正",
+                "source_location": "src/auth/login.ts",
+            }
+        )
+
+        self.assertNotIn("確認すべき関連ファイル・処理", prompt)
+        self.assertIn("2. 追加で確認すべきこと", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()
